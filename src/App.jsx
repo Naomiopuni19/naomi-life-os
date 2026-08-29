@@ -14,7 +14,7 @@ import { useJournal } from "./lib/useJournal";
 import { useSupabaseList, useSupabaseRow } from "./lib/useSupabaseList";
 import { useMemories } from "./lib/useMemories";
 import { useSleepLog, deriveSleepSummary } from "./lib/useSleepLog";
-import { useNotificationPermission } from "./lib/useNotificationPermission";
+import { usePushNotifications } from "./lib/usePushNotifications";
 import { useProfile } from "./lib/useProfile";
 import { useDocuments } from "./lib/useDocuments";
 import { supabase } from "./lib/supabaseClient";
@@ -2303,7 +2303,7 @@ function SettingsSection() {
   const { profile, update: updateProfile, uploadAvatar, uploading: avatarUploading } = useProfile();
   const [exportMsg, setExportMsg] = useState("");
   const [confirmClear, setConfirmClear] = useState(false);
-  const { permission, requestPermission, sendTestNotification } = useNotificationPermission();
+  const { permission, subscribed, loading: pushLoading, enablePush, sendTestPush } = usePushNotifications();
 
   const exportData = () => {
     const data = {};
@@ -2423,13 +2423,15 @@ function SettingsSection() {
       <div className="glass rounded-2xl p-5 animate-in delay-1">
         <CardHeader title="Notifications" action="" />
         {permission === "unsupported" && (
-          <p className="text-sm text-[#9A8A76] mt-2">Your browser doesn't support notifications.</p>
+          <p className="text-sm text-[#9A8A76] mt-2">Your browser doesn't support push notifications.</p>
         )}
-        {permission === "granted" && (
+        {permission === "granted" && subscribed && (
           <>
-            <p className="text-sm text-[#9A8A76] mt-2">Notifications are enabled on this device.</p>
-            <button onClick={sendTestNotification} className="mt-3 px-4 py-2 rounded-lg border border-[#EEE0CE] dark:border-[#3B2F26] text-sm">
-              Send a test notification
+            <p className="text-sm text-[#9A8A76] mt-2">
+              Push notifications are on for this device. You'll get a real one with your daily digest, even with the app closed.
+            </p>
+            <button onClick={sendTestPush} className="mt-3 px-4 py-2 rounded-lg border border-[#EEE0CE] dark:border-[#3B2F26] text-sm">
+              Send a test push
             </button>
           </>
         )}
@@ -2438,13 +2440,13 @@ function SettingsSection() {
             Notifications are blocked for this site. You can re-enable them in your browser's site settings.
           </p>
         )}
-        {permission === "default" && (
+        {(permission === "default" || (permission === "granted" && !subscribed)) && (
           <>
             <p className="text-sm text-[#9A8A76] mt-2">
-              Turn these on so Naomi can remind you about deadlines and check in when you've been away.
+              Turn these on so Naomi can reach you with a real notification, even when the app is closed.
             </p>
-            <button onClick={requestPermission} className="mt-3 px-4 py-2 rounded-lg bg-[#5C4433] text-white text-sm">
-              Enable notifications
+            <button onClick={enablePush} disabled={pushLoading} className="mt-3 px-4 py-2 rounded-lg bg-[#5C4433] text-white text-sm disabled:opacity-50">
+              {pushLoading ? "Enabling..." : "Enable push notifications"}
             </button>
           </>
         )}
