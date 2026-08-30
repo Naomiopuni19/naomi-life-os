@@ -2781,7 +2781,7 @@ function RemindersSection() {
             </div>
             <div className="flex items-center gap-2 shrink-0">
               <span className="text-xs px-2 py-1 rounded-full bg-[#F3E8D8] dark:bg-[#2A231C]">{i.days} days</span>
-              <button onClick={i.remove} className="opacity-0 group-hover:opacity-100 text-[#B08C77]"><X size={13} /></button>
+              <button onClick={i.remove} className="text-[#B08C77] hover:text-[#8A4A3A] shrink-0"><X size={14} /></button>
             </div>
           </div>
         ))}
