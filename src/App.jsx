@@ -2733,20 +2733,20 @@ function LibrarySection() {
 
 /* ---------------- Reminders / Life Radar ---------------- */
 function RemindersSection() {
-  const { rows: events, updateRow: updateEvent } = useSupabaseList("events");
-  const { rows: courses, updateRow: updateCourse } = useSupabaseList("education_courses");
-  const { rows: loveDates, updateRow: updateLoveDate } = useSupabaseList("love_dates");
-  const { rows: milestones, updateRow: updateMilestone } = useSupabaseList("timeline_milestones");
+  const { rows: events, updateRow: updateEvent, removeRow: removeEvent } = useSupabaseList("events");
+  const { rows: courses, updateRow: updateCourse, removeRow: removeCourse } = useSupabaseList("education_courses");
+  const { rows: loveDates, updateRow: updateLoveDate, removeRow: removeLoveDate } = useSupabaseList("love_dates");
+  const { rows: milestones, updateRow: updateMilestone, removeRow: removeMilestone } = useSupabaseList("timeline_milestones");
   const { rows: goals } = useSupabaseList("goals");
 
   const today = new Date();
   today.setHours(0, 0, 0, 0);
 
   const items = [
-    ...events.map((e) => ({ id: e.id, label: e.title, date: e.date, source: "Home", update: (patch) => updateEvent(e.id, { title: patch.label ?? e.title, date: patch.date ?? e.date }) })),
-    ...courses.filter((c) => c.exam_date && c.status !== "done").map((c) => ({ id: c.id, label: c.name, date: c.exam_date, source: "Education", update: (patch) => updateCourse(c.id, { name: patch.label ?? c.name, exam_date: patch.date ?? c.exam_date }) })),
-    ...loveDates.map((d) => ({ id: d.id, label: d.label, date: d.date, source: "Love Life", update: (patch) => updateLoveDate(d.id, { label: patch.label ?? d.label, date: patch.date ?? d.date }) })),
-    ...milestones.map((m) => ({ id: m.id, label: m.title, date: m.date, source: "Timeline", update: (patch) => updateMilestone(m.id, { title: patch.label ?? m.title, date: patch.date ?? m.date }) })),
+    ...events.map((e) => ({ id: e.id, label: e.title, date: e.date, source: "Home", update: (patch) => updateEvent(e.id, { title: patch.label ?? e.title, date: patch.date ?? e.date }), remove: () => removeEvent(e.id) })),
+    ...courses.filter((c) => c.exam_date && c.status !== "done").map((c) => ({ id: c.id, label: c.name, date: c.exam_date, source: "Education", update: (patch) => updateCourse(c.id, { name: patch.label ?? c.name, exam_date: patch.date ?? c.exam_date }), remove: () => removeCourse(c.id) })),
+    ...loveDates.map((d) => ({ id: d.id, label: d.label, date: d.date, source: "Love Life", update: (patch) => updateLoveDate(d.id, { label: patch.label ?? d.label, date: patch.date ?? d.date }), remove: () => removeLoveDate(d.id) })),
+    ...milestones.map((m) => ({ id: m.id, label: m.title, date: m.date, source: "Timeline", update: (patch) => updateMilestone(m.id, { title: patch.label ?? m.title, date: patch.date ?? m.date }), remove: () => removeMilestone(m.id) })),
   ]
     .map((i) => ({ ...i, days: daysUntil(i.date) }))
     .filter((i) => i.days >= 0)
@@ -2766,28 +2766,23 @@ function RemindersSection() {
       <div className="space-y-2 mt-3">
         {list.length === 0 && <p className="text-sm text-[#9A8A76]">Nothing here.</p>}
         {list.map((i, idx) => (
-          <div key={idx} className="flex items-center justify-between text-sm gap-2">
+          <div key={idx} className="flex items-center justify-between text-sm gap-2 group">
             <div className="min-w-0">
-              {i.update ? (
-                <p><EditableText value={i.label} onSave={(v) => v && i.update({ label: v })} /></p>
-              ) : (
-                <p>{i.label} <span className="text-[10px] text-[#B0A08A]">(edit in {i.source})</span></p>
-              )}
+              <p><EditableText value={i.label} onSave={(v) => v && i.update({ label: v })} /></p>
               <div className="flex items-center gap-1 text-[11px] text-[#9A8A76]">
                 <span>{i.source} ·</span>
-                {i.update ? (
-                  <input
-                    type="date"
-                    value={i.date}
-                    onChange={(e) => i.update({ date: e.target.value })}
-                    className="bg-transparent outline-none text-[11px] text-[#9A8A76] cursor-pointer"
-                  />
-                ) : (
-                  <span>{fmt(i.date)}</span>
-                )}
+                <input
+                  type="date"
+                  value={i.date}
+                  onChange={(e) => i.update({ date: e.target.value })}
+                  className="bg-transparent outline-none text-[11px] text-[#9A8A76] cursor-pointer"
+                />
               </div>
             </div>
-            <span className="text-xs px-2 py-1 rounded-full bg-[#F3E8D8] dark:bg-[#2A231C] shrink-0">{i.days} days</span>
+            <div className="flex items-center gap-2 shrink-0">
+              <span className="text-xs px-2 py-1 rounded-full bg-[#F3E8D8] dark:bg-[#2A231C]">{i.days} days</span>
+              <button onClick={i.remove} className="opacity-0 group-hover:opacity-100 text-[#B08C77]"><X size={13} /></button>
+            </div>
           </div>
         ))}
       </div>
