@@ -41,6 +41,7 @@ export function useDocuments() {
     }
   };
 
+  // Documents live in a private bucket, so every view needs a fresh, short-lived link
   const viewDocument = async (filePath) => {
     const { data, error } = await supabase.storage.from("documents").createSignedUrl(filePath, 60);
     if (!error && data) window.open(data.signedUrl, "_blank");
@@ -52,5 +53,10 @@ export function useDocuments() {
     if (!error) setDocuments((d) => d.filter((x) => x.id !== id));
   };
 
-  return { documents, loading, uploading, uploadDocument, viewDocument, removeDocument };
+  const renameDocument = async (id, title) => {
+    const { error } = await supabase.from("documents").update({ title }).eq("id", id);
+    if (!error) setDocuments((d) => d.map((x) => (x.id === id ? { ...x, title } : x)));
+  };
+
+  return { documents, loading, uploading, uploadDocument, viewDocument, removeDocument, renameDocument };
 }

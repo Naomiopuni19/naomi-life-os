@@ -970,6 +970,49 @@ function CardHeader({ title, action }) {
   );
 }
 
+// Click any text using this to edit it in place, blur or Enter saves, Escape cancels.
+function EditableText({ value, onSave, className = "", placeholder = "", multiline = false }) {
+  const [editing, setEditing] = useState(false);
+  const [draft, setDraft] = useState(value || "");
+
+  const commit = () => {
+    setEditing(false);
+    if (draft.trim() !== (value || "")) onSave(draft.trim());
+  };
+  const cancel = () => {
+    setDraft(value || "");
+    setEditing(false);
+  };
+
+  if (editing) {
+    const Field = multiline ? "textarea" : "input";
+    return (
+      <Field
+        autoFocus
+        value={draft}
+        onChange={(e) => setDraft(e.target.value)}
+        onBlur={commit}
+        onKeyDown={(e) => {
+          if (e.key === "Enter" && !multiline) commit();
+          if (e.key === "Escape") cancel();
+        }}
+        rows={multiline ? 2 : undefined}
+        className={`bg-transparent border-b border-[#8A5A44] outline-none w-full ${className}`}
+      />
+    );
+  }
+
+  return (
+    <span
+      onClick={() => setEditing(true)}
+      className={`cursor-text hover:bg-white/30 dark:hover:bg-white/5 rounded px-0.5 -mx-0.5 transition ${className}`}
+      title="Click to edit"
+    >
+      {value || <span className="text-[#B0A08A] italic">{placeholder}</span>}
+    </span>
+  );
+}
+
 function SidebarContent({ active, setActive, profileName, tagline, avatarUrl, onUploadAvatar, avatarUploading }) {
   return (
     <>
@@ -2690,20 +2733,20 @@ function LibrarySection() {
 
 /* ---------------- Reminders / Life Radar ---------------- */
 function RemindersSection() {
-  const { rows: events } = useSupabaseList("events");
-  const { rows: courses } = useSupabaseList("education_courses");
-  const { rows: loveDates } = useSupabaseList("love_dates");
-  const { rows: milestones } = useSupabaseList("timeline_milestones");
+  const { rows: events, updateRow: updateEvent } = useSupabaseList("events");
+  const { rows: courses, updateRow: updateCourse } = useSupabaseList("education_courses");
+  const { rows: loveDates, updateRow: updateLoveDate } = useSupabaseList("love_dates");
+  const { rows: milestones, updateRow: updateMilestone } = useSupabaseList("timeline_milestones");
   const { rows: goals } = useSupabaseList("goals");
 
   const today = new Date();
   today.setHours(0, 0, 0, 0);
 
   const items = [
-    ...events.map((e) => ({ label: e.title, date: e.date, source: "Home" })),
-    ...courses.filter((c) => c.exam_date && c.status !== "done").map((c) => ({ label: c.name, date: c.exam_date, source: "Education" })),
-    ...loveDates.map((d) => ({ label: d.label, date: d.date, source: "Love Life" })),
-    ...milestones.map((m) => ({ label: m.title, date: m.date, source: "Timeline" })),
+    ...events.map((e) => ({ id: e.id, label: e.title, date: e.date, source: "Home", update: (patch) => updateEvent(e.id, { title: patch.label ?? e.title, date: patch.date ?? e.date }) })),
+    ...courses.filter((c) => c.exam_date && c.status !== "done").map((c) => ({ id: c.id, label: c.name, date: c.exam_date, source: "Education", update: (patch) => updateCourse(c.id, { name: patch.label ?? c.name, exam_date: patch.date ?? c.exam_date }) })),
+    ...loveDates.map((d) => ({ id: d.id, label: d.label, date: d.date, source: "Love Life", update: (patch) => updateLoveDate(d.id, { label: patch.label ?? d.label, date: patch.date ?? d.date }) })),
+    ...milestones.map((m) => ({ id: m.id, label: m.title, date: m.date, source: "Timeline", update: (patch) => updateMilestone(m.id, { title: patch.label ?? m.title, date: patch.date ?? m.date }) })),
   ]
     .map((i) => ({ ...i, days: daysUntil(i.date) }))
     .filter((i) => i.days >= 0)
@@ -2723,12 +2766,28 @@ function RemindersSection() {
       <div className="space-y-2 mt-3">
         {list.length === 0 && <p className="text-sm text-[#9A8A76]">Nothing here.</p>}
         {list.map((i, idx) => (
-          <div key={idx} className="flex items-center justify-between text-sm">
-            <div>
-              <p>{i.label}</p>
-              <p className="text-[11px] text-[#9A8A76]">{i.source} · {fmt(i.date)}</p>
+          <div key={idx} className="flex items-center justify-between text-sm gap-2">
+            <div className="min-w-0">
+              {i.update ? (
+                <p><EditableText value={i.label} onSave={(v) => v && i.update({ label: v })} /></p>
+              ) : (
+                <p>{i.label} <span className="text-[10px] text-[#B0A08A]">(edit in {i.source})</span></p>
+              )}
+              <div className="flex items-center gap-1 text-[11px] text-[#9A8A76]">
+                <span>{i.source} ·</span>
+                {i.update ? (
+                  <input
+                    type="date"
+                    value={i.date}
+                    onChange={(e) => i.update({ date: e.target.value })}
+                    className="bg-transparent outline-none text-[11px] text-[#9A8A76] cursor-pointer"
+                  />
+                ) : (
+                  <span>{fmt(i.date)}</span>
+                )}
+              </div>
             </div>
-            <span className="text-xs px-2 py-1 rounded-full bg-[#F3E8D8] dark:bg-[#2A231C] shrink-0 ml-2">{i.days} days</span>
+            <span className="text-xs px-2 py-1 rounded-full bg-[#F3E8D8] dark:bg-[#2A231C] shrink-0">{i.days} days</span>
           </div>
         ))}
       </div>
@@ -3068,7 +3127,7 @@ function AboutSection() {
 const DOC_CATEGORIES = ["Identification", "Education", "Career", "Other"];
 
 function DocumentsSection() {
-  const { documents, uploading, uploadDocument, viewDocument, removeDocument } = useDocuments();
+  const { documents, uploading, uploadDocument, viewDocument, removeDocument, renameDocument } = useDocuments();
   const [form, setForm] = useState({ title: "", category: "Identification" });
   const [file, setFile] = useState(null);
 
@@ -3132,7 +3191,7 @@ function DocumentsSection() {
             {items.map((d) => (
               <div key={d.id} className="glass rounded-2xl p-4 flex items-center justify-between gap-3">
                 <div className="min-w-0">
-                  <p className="text-sm font-medium truncate">{d.title}</p>
+                  <p className="text-sm font-medium truncate"><EditableText value={d.title} onSave={(v) => v && renameDocument(d.id, v)} /></p>
                   <p className="text-[11px] text-[#9A8A76] truncate">{d.file_name}</p>
                 </div>
                 <div className="flex items-center gap-2 shrink-0">
@@ -3226,7 +3285,7 @@ function HabitsSection() {
               return (
                 <tr key={h.id} className="border-t border-[#EEE0CE] dark:border-[#3B2F26]">
                   <td className="py-2.5 pr-2">
-                    <p className="font-medium">{h.name}</p>
+                    <p className="font-medium"><EditableText value={h.name} onSave={(v) => v && updateRow(h.id, { name: v })} /></p>
                     <p className="text-[10px] text-[#9A8A76]">{streak}/7 this week</p>
                   </td>
                   {week.map((d) => (
@@ -3320,7 +3379,7 @@ function PlacesSection() {
             <button onClick={() => removeRow(p.id)} className="absolute top-3 right-3 opacity-0 group-hover:opacity-100 text-[#B08C77]"><X size={13} /></button>
             <div className="flex items-center gap-2 pr-6">
               <MapPin size={14} className="text-[#8A5A44] shrink-0" />
-              <p className="font-medium">{p.name}</p>
+              <p className="font-medium"><EditableText value={p.name} onSave={(v) => v && updateRow(p.id, { name: v })} /></p>
             </div>
             <div className="flex gap-1.5 mt-2">
               {["want", "visited"].map((s) => (
@@ -3345,7 +3404,7 @@ function PlacesSection() {
 
 /* ---------------- Wins ---------------- */
 function WinsSection() {
-  const { rows: wins, addRow, removeRow } = useSupabaseList("wins", "created_at", false, [
+  const { rows: wins, addRow, updateRow, removeRow } = useSupabaseList("wins", "created_at", false, [
     { text: "Halliburton interview via Career Services" },
     { text: "Huawei extended interview" },
   ]);
@@ -3379,7 +3438,9 @@ function WinsSection() {
         {wins.map((w, i) => (
           <div key={w.id} className={`glass rounded-2xl p-4 animate-in delay-${Math.min((i % 6) + 1, 6)} relative group`}>
             <Trophy size={16} className="text-[#B8863B] mb-2" />
-            <p className="text-sm pr-6">{w.text}</p>
+            <p className="text-sm pr-6">
+              <EditableText value={w.text} onSave={(v) => v && updateRow(w.id, { text: v })} />
+            </p>
             <p className="text-[11px] text-[#9A8A76] mt-2">{new Date(w.created_at).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })}</p>
             <button onClick={() => removeRow(w.id)} className="absolute top-3 right-3 opacity-0 group-hover:opacity-100 text-[#B08C77]"><X size={13} /></button>
           </div>
@@ -3432,8 +3493,8 @@ function RecommendersSection() {
         {recommenders.map((r) => (
           <div key={r.id} className="glass rounded-2xl p-4 animate-in relative group">
             <button onClick={() => removeRow(r.id)} className="absolute top-4 right-4 opacity-0 group-hover:opacity-100 text-[#B08C77]"><X size={14} /></button>
-            <p className="font-medium pr-6">{r.name}</p>
-            <p className="text-xs text-[#9A8A76]">{r.role}</p>
+            <p className="font-medium pr-6"><EditableText value={r.name} onSave={(v) => v && updateRow(r.id, { name: v })} /></p>
+            <p className="text-xs text-[#9A8A76]"><EditableText value={r.role} onSave={(v) => updateRow(r.id, { role: v })} placeholder="Add a role" /></p>
             <div className="grid sm:grid-cols-2 gap-3 mt-3">
               <div>
                 <label className="text-[11px] text-[#9A8A76]">Last asked</label>
