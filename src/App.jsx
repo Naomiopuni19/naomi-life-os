@@ -113,6 +113,7 @@ export default function App() {
 
   const [journalEntry, setJournalEntry] = useStored("journal_quote", "Today, I choose progress over perfection.");
   const { row: watching, update: updateWatching } = useSupabaseRow("watching", { title: "Stranger Things", detail: "Season 2 · Episode 4", progress: 42, next: "S2 E5 - Chapter Five" });
+  const { memories } = useMemories();
 
   const { rows: goals } = useSupabaseList("goals", "created_at", true, defaultGoalsShared);
 
@@ -300,10 +301,19 @@ export default function App() {
                     </div>
                   </div>
                   <p className="text-center text-sm mt-3 font-medium">{sleep.total} <span className="text-xs text-[#9A8A76] font-normal">Total Sleep</span></p>
-                  <div className="flex items-end gap-1.5 mt-4 h-14">
-                    {sleep.week.map((h, i) => (
-                      <div key={i} className="flex-1 bg-[#F0DCC9] rounded-full" style={{ height: `${(h / 5) * 100}%` }} />
-                    ))}
+                  <div className="flex items-end gap-1.5 mt-4 h-14 overflow-hidden">
+                    {Array.from({ length: 7 }).map((_, i) => {
+                      const hrs = Number(sleep.week?.[i]) || 0;
+                      const pct = Math.max(hrs > 0 ? 8 : 4, Math.min(100, (hrs / 10) * 100));
+                      return (
+                        <div
+                          key={i}
+                          title={hrs > 0 ? `${hrs.toFixed(1)} hrs` : "No data"}
+                          className={`flex-1 rounded-full ${hrs > 0 ? "bg-[#E8C4A8]" : "bg-[#F0DCC9]/60"}`}
+                          style={{ height: `${pct}%` }}
+                        />
+                      );
+                    })}
                   </div>
                   <div className="flex justify-between text-[10px] text-[#9A8A76] mt-1">
                     {["M", "T", "W", "T", "F", "S", "S"].map((d, i) => <span key={i}>{d}</span>)}
@@ -395,9 +405,27 @@ export default function App() {
                 {/* Memory of the day */}
                 <div className="glass rounded-2xl animate-in p-5">
                   <CardHeader title="Memory Of The Day" action="View all" />
-                  <div className="rounded-xl overflow-hidden mt-3 h-32 bg-gradient-to-br from-[#8A5A44] via-[#5C4433] to-[#2E241C]" />
-                  <p className="text-xs text-[#9A8A76] mt-2">{fmt(new Date().toISOString())}</p>
-                  <p className="text-sm mt-1">One of those peaceful evenings that healed something in me.</p>
+                  {memories.length > 0 ? (() => {
+                    const dayOfYear = Math.floor((today - new Date(today.getFullYear(), 0, 0)) / 86400000);
+                    const pick = memories[dayOfYear % memories.length];
+                    return (
+                      <>
+                        <div
+                          className="rounded-xl overflow-hidden mt-3 h-32 bg-cover bg-center"
+                          style={{ backgroundImage: `url(${pick.image_url})` }}
+                        />
+                        <p className="text-xs text-[#9A8A76] mt-2">{fmt(pick.created_at)}</p>
+                        <p className="text-sm mt-1">{pick.caption || "A memory worth keeping."}</p>
+                      </>
+                    );
+                  })() : (
+                    <>
+                      <div className="rounded-xl overflow-hidden mt-3 h-32 bg-gradient-to-br from-[#8A5A44] via-[#5C4433] to-[#2E241C] flex items-center justify-center">
+                        <p className="text-xs text-[#F3D9CE]">No memories saved yet</p>
+                      </div>
+                      <p className="text-xs text-[#9A8A76] mt-2">Head to Memories to save your first one.</p>
+                    </>
+                  )}
                 </div>
               </div>
 
