@@ -1118,6 +1118,18 @@ function CareerSection() {
   const [form, setForm] = useState({ org: "", note: "" });
   const [filter, setFilter] = useState("all");
 
+  // Deadlines live in their own column, loaded separately so the main hook stays untouched
+  const [deadlines, setDeadlines] = useState({});
+  useEffect(() => {
+    supabase.from("career_apps").select("id, deadline").then(({ data }) => {
+      setDeadlines(Object.fromEntries((data || []).map((r) => [r.id, r.deadline])));
+    });
+  }, [apps.length]);
+  const saveDeadline = async (id, value) => {
+    setDeadlines((d) => ({ ...d, [id]: value || null }));
+    await supabase.from("career_apps").update({ deadline: value || null }).eq("id", id);
+  };
+
   const addApp = () => {
     if (!form.org.trim()) return;
     addAppDb(form.org.trim(), form.note.trim());
@@ -1198,6 +1210,25 @@ function CareerSection() {
                   className="text-xs text-[#9A8A76] bg-transparent outline-none w-full mt-1"
                 />
               )}
+              <div className="flex items-center gap-2 mt-2">
+                <span className="text-[11px] text-[#9A8A76]">Deadline</span>
+                <input
+                  type="date"
+                  value={deadlines[a.id] || ""}
+                  onChange={(e) => saveDeadline(a.id, e.target.value)}
+                  className="text-xs bg-transparent outline-none border border-[#EEE0CE] dark:border-[#3B2F26] rounded-md px-1.5 py-0.5"
+                />
+                {deadlines[a.id] && (() => {
+                  const d = daysUntil(deadlines[a.id]);
+                  const label = d < 0 ? "Passed" : d === 0 ? "Today" : d === 1 ? "Tomorrow" : `${d} days`;
+                  const urgent = d >= 0 && d <= 7;
+                  return (
+                    <span className={`text-[11px] px-2 py-0.5 rounded-full ${urgent ? "bg-rose-50 text-rose-700" : "bg-[#F3D9CE]/60 text-[#8A5A44]"}`}>
+                      {label}
+                    </span>
+                  );
+                })()}
+              </div>
               <div className="flex flex-wrap gap-1.5 mt-3">
                 {STATUS_OPTIONS.map((s) => (
                   <button
@@ -2376,23 +2407,51 @@ function SettingsSection() {
   const [confirmClear, setConfirmClear] = useState(false);
   const { permission, subscribed, loading: pushLoading, enablePush, sendTestPush } = usePushNotifications();
 
-  const exportData = () => {
-    const data = {};
+  const BACKUP_TABLES = [
+    "profiles", "tasks", "events", "journal_entries", "goals", "career_apps", "education_courses",
+    "love_dates", "love_notes", "finance_txns", "savings_goal", "sleep_log", "entertainment_items",
+    "watching", "memories", "library_items", "timeline_milestones", "free_notes", "habits", "places",
+    "wins", "recommenders", "documents", "period_cycles", "chat_conversations", "chat_messages",
+  ];
+
+  const exportData = async () => {
+    setExportMsg("Collecting everything...");
+    const data = { exported_at: new Date().toISOString(), device_settings: {}, tables: {} };
+
     ALL_DATA_KEYS.forEach((key) => {
       const raw = localStorage.getItem(key);
       if (raw !== null) {
-        try { data[key] = JSON.parse(raw); } catch { data[key] = raw; }
+        try { data.device_settings[key] = JSON.parse(raw); } catch { data.device_settings[key] = raw; }
       }
     });
+
+    // Pull every row of every table, 1000 at a time, skipping any table that does not exist
+    const counts = {};
+    for (const table of BACKUP_TABLES) {
+      const rows = [];
+      let from = 0;
+      for (;;) {
+        const { data: page, error } = await supabase.from(table).select("*").range(from, from + 999);
+        if (error || !page) break;
+        rows.push(...page);
+        if (page.length < 1000) break;
+        from += 1000;
+      }
+      if (table === "profiles") rows.forEach((r) => { delete r.privacy_pin; });
+      data.tables[table] = rows;
+      counts[table] = rows.length;
+    }
+
+    const total = Object.values(counts).reduce((a, b) => a + b, 0);
     const blob = new Blob([JSON.stringify(data, null, 2)], { type: "application/json" });
     const url = URL.createObjectURL(blob);
     const a = document.createElement("a");
     a.href = url;
-    a.download = `naomi-life-os-backup-${new Date().toISOString().slice(0, 10)}.json`;
+    a.download = `naomi-life-os-full-backup-${new Date().toISOString().slice(0, 10)}.json`;
     a.click();
     URL.revokeObjectURL(url);
-    setExportMsg("Backup downloaded.");
-    setTimeout(() => setExportMsg(""), 3000);
+    setExportMsg(`Backup downloaded, ${total} items saved.`);
+    setTimeout(() => setExportMsg(""), 6000);
   };
 
   const clearAllData = () => {
@@ -2529,7 +2588,7 @@ function SettingsSection() {
       <div className="glass rounded-2xl p-5 animate-in delay-2">
         <CardHeader title="Backup your data" action="" />
         <p className="text-sm text-[#9A8A76] mt-2">
-          Backs up your device settings (theme, mood, today's quote). Your tasks, applications, journal, memories, and everything else now live safely in your Supabase database, synced automatically.
+          Downloads one file with everything: tasks, journal, applications, goals, finance, sleep, notes, memory captions, document details, chats and your device settings. Photos and document files themselves stay in your Supabase storage, only their details are saved here.
         </p>
         <button onClick={exportData} className="mt-3 px-4 py-2 rounded-lg bg-[#5C4433] text-white text-sm">
           Export my data
